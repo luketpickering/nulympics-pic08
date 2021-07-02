@@ -35,14 +35,16 @@ function make_particle_list()
       self.cull_every = ce
       self.cull_ctr = ce
     end,
-    cull = function(self)
+    num = function(self) return #self.particles end,
+    remove_if = function(self, test)
       for P in all(self.particles) do
-        if( not invp(P.pos.x, P.pos.y) ) then
-          del(self.particles,P)
-        end
-      end
+    		if(test(P)) del(self.particles, P)
+  		end
+  	end,
+    cull = function(self)
+    	self:remove_if(function(p) return not invp(p.pos.x, p.pox.y) end)
       self.cull_ctr = self.cull_every
-    end
+    end,
 	};
 end
 

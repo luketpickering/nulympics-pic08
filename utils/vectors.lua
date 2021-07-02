@@ -2,6 +2,10 @@ function vec(x,y)
 	return {x = x or 0, y = y or 0}
 end
 
+function lvec(x,y,t)
+	return {x = x or 0, y = y or 0, t = t or 0}
+end
+
 function vadd(a, b)
 	return vec(a.x + b.x, a.y + b.y)
 end

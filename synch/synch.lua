@@ -1,46 +1,58 @@
+kSYN_PAUSE = 0b1
+kSYN_RUN = 0b10
+kSYN_WIN = 0b100
+kSYN_END = 0b1000
 
-function accelerate_init()
-  init_debug()
+function synch_init()
+  MAGSPACING=100
 
-  MAGSPACING=128
-
+  MSPACE_MIN=50
+  MSPACE_MAX=256
   MAGSPACING=clamp(MAGSPACING,MSPACE_MIN,MSPACE_MAX)
 
+  FODO_MIN=50
   FODOGAP = FODO_MIN
   FODOGAP=clamp(FODOGAP,FODO_MIN,MAGSPACING)
 
   WINDIST=10000
 
-  ACC_STATE=kSTART
-
   MAGNETS = {}
-  add(MAGNETS, create_magnet(vec(64,80),vec(16,32)))
-  add(MAGNETS, create_magnet(vec(64+FODOGAP,80),vec(16,32)))
-  add(MAGNETS, create_magnet(vec(64+MAGSPACING,80),vec(16,32)))
-  add(MAGNETS, create_magnet(vec(64+FODOGAP+MAGSPACING,80),vec(16,32)))
-  add(MAGNETS, create_magnet(vec(64+(2*MAGSPACING),80),vec(16,32)))
-  add(MAGNETS, create_magnet(vec(64+FODOGAP+(2*MAGSPACING),80),vec(16,32)))
+  add(MAGNETS, create_magnet(vec(64,80),vec(16,30)))
+  add(MAGNETS, create_magnet(vec(64+FODOGAP,80),vec(16,30)))
+  add(MAGNETS, create_magnet(vec(64+MAGSPACING,80),vec(16,30)))
+  add(MAGNETS, create_magnet(vec(64+FODOGAP+MAGSPACING,80),vec(16,30)))
+  add(MAGNETS, create_magnet(vec(64+(2*MAGSPACING),80),vec(16,30)))
+  add(MAGNETS, create_magnet(vec(64+FODOGAP+(2*MAGSPACING),80),vec(16,30)))
   MAGNETS[1].current = 0
-
-  PROTONS = {}
-  add(PROTONS, create_proton(vec(rnd(16),80 - 16 + rnd(32)), vec(100,rnd(20)-10),5))
-  add(PROTONS, create_proton(vec(rnd(16),80 - 16 + rnd(32)), vec(100,rnd(20)-10),5))
-  add(PROTONS, create_proton(vec(rnd(16),80 - 16 + rnd(32)), vec(100,rnd(20)-10),5))
-  add(PROTONS, create_proton(vec(rnd(16),80 - 16 + rnd(32)), vec(100,rnd(20)-10),5))
-  add(PROTONS, create_proton(vec(rnd(16),80 - 16 + rnd(32)), vec(100,rnd(20)-10),5))
-  add(PROTONS, create_proton(vec(rnd(16),80 - 16 + rnd(32)), vec(100,rnd(20)-10),5))
-
-  player_proton = create_proton(vec(8,80 - 16 + rnd(32)), vec(100,rnd(20)-10))
 
   make_beampipe()
 
-  ACC_STATE=kRUN
+  beam_width = 0
+  beam_emittance = 0
+
+  synch_nprotons = 50
+  synch_protons = make_particle_list()
+  synch_protons:add_parts(generate_particles(vec(5,80),synch_nprotons, 5, true, kRED))
+  synch_protons:update(function(p)
+      p:kick(vec(100, rnd(20) - 10))
+      p:update(0)
+      beam_width += abs(p.pos.y - bp.y)
+      beam_emittance += abs(p.dpdt.y) 
+  end)
+  beam_width /= synch_protons:num()
+  beam_emittance /= synch_protons:num()
+
+  player_proton = make_particle(vec(5,80), nil, kSPR_PROTON_R)
+  player_proton:kick(vec(100,rnd(20) - 10))
+  player_proton:update(0)
+
+
+  SYN_STATE=kSYN_RUN
 
   GAME_STATES[STATE][2] = false
 end
 
-function accelerate_update()
-
+function synch_update()
   if((MAGNETS[3].center.x + MAGNETS[3].hlength - player_proton.pos.x) < 0) then
     MAGNETS[1] = MAGNETS[3]
     MAGNETS[2] = MAGNETS[4]
@@ -52,51 +64,52 @@ function accelerate_update()
     MAGNETS[6].current = MAGNETS[2].current
   end
 
-  if(ACC_STATE == kRUN) then
+  if(SYN_STATE == kSYN_RUN) then
     read_input()
-    local bf = 0
-    for M in all(MAGNETS) do
-      bf += get_bfield(M, player_proton.pos)
-    end
-    force(player_proton, vec(0,-player_proton.dpdt.x * bf))
-    advance(player_proton, 1/30)
 
-    for P in all(PROTONS) do
-      local bf = 0
-      for M in all(MAGNETS) do
-        bf += get_bfield(M, P.pos)
-      end
+    if btn(1) then
+      local bf = get_bfield_list(MAGNETS, player_proton.pos)
+      player_proton:kick(vec(0, - player_proton.dpdt.x * bf))
+      player_proton:update(FSPEED)
 
-      force(P, vec(0,-P.dpdt.x * bf))
-      advance(P, 1/30)
+      beam_width = 0
+      beam_emittance = 0
+
+      synch_protons:update(function(p)
+        local bf = get_bfield_list(MAGNETS, p.pos)
+        beam_width += p.pos.y - bp.y
+        beam_emittance += abs(p.dpdt.y)
+        p:kick(vec(0, - p.dpdt.x * bf))
+        p:update(FSPEED)
+      end)
+
+      beam_width /= synch_protons:num()
+      beam_emittance /= synch_protons:num()
     end
 
     if(abs(player_proton.pos.y - bp.y) > (bp.hwy-2)) then
-      ACC_STATE = kEND
+      printh("beam loss: "..v2s(player_proton.pos)..", "..v2s(bp)..", bhy: "..bp.hwy)
+      SYN_STATE = kSYN_END
     end
 
     if(player_proton.pos.x > WINDIST) then
-      ACC_STATE = kWIN
+      SYN_STATE = kSYN_WIN
     end
 
-    for P in all(PROTONS) do
-      if(abs(P.pos.y - bp.y) > (bp.hwy-2)) then
-        del(PROTONS,P)
-      end
-    end
+    synch_protons:remove_if(function(p) return (abs(p.pos.y - bp.y) > (bp.hwy-2)) end)
   end
 
   camera(player_proton.pos.x - 16, 0)
 end
 
-function accelerate_draw()
+function synch_draw()
   
-  if(ACC_STATE==kEND) then
+  if(SYN_STATE==kSYN_END) then
     print("BEAM LOSS!", 0,24)
     return
   end
   
-  if(ACC_STATE==kWIN) then
+  if(SYN_STATE==kSYN_WIN) then
     print("You made it to the beam window", 0,24)
     return
   end
@@ -136,27 +149,23 @@ function accelerate_draw()
       deltax/2 + x1 - 3, y1 - 6, kRED)
   end
   
-  for P in all(PROTONS) do
-    draw_moveable(P)
-  end
+  synch_protons:draw()
 
   draw_beampipe()
-  draw_moveable(player_proton)
 
-  local testp = create_moveable(player_proton.pos, player_proton.dpdt)
-  local bf = 0
+  player_proton:spr(player_proton.spr_id)
+
+  local testp = make_moveable(player_proton.pos)
+  testp.dpdt = player_proton.dpdt
 
   for Tf = 0, 360 do
-    advance(testp, 1/30)
-    bf = 0
+    testp:update(FSPEED)
 
-    for M in all(MAGNETS) do
-      bf += get_bfield(M, testp.pos)
-    end
+    local bf = get_bfield_list(MAGNETS, testp.pos)
+    testp:kick(vec(0, - testp.dpdt.x * bf))
 
-    force(testp, vec(0,-testp.dpdt.x * bf))
     if((Tf > 0) and (Tf%1)==0) then
-      pset(testp.pos.x, testp.pos.y, 11)
+      testp:pset(kGREEN)
     end
 
     if(abs(testp.pos.y - bp.y) > (bp.hwy-2)) then
@@ -176,6 +185,7 @@ end
 function make_beampipe()
   bp={}
   bp.y = 80
+  bp.x = 0
   bp.hwy = 20 -- y half width in px
 end
 
@@ -185,21 +195,7 @@ function draw_beampipe()
 end
 
 function read_input()
-  local fododelta = 0
-  local magspacedelta = 0
   local delta = 1
-  if (btn(5)) then
-    delta = 5
-  end
-
-  if (btn(4)) then
-    if (btnp(0)) magspacedelta-=delta --left
-    if (btnp(1)) magspacedelta+=delta --right
-  else
-    if (btnp(0)) fododelta-=delta --left
-    if (btnp(1)) fododelta+=delta --right
-  end
-
   local magdelta = 0
   if (btnp(2)) magdelta += delta --up
   if (btnp(3)) magdelta -= delta --down
@@ -211,19 +207,16 @@ function read_input()
       MAGNETS[M].current = clamp(MAGNETS[M].current + (magdelta/5),-5,5)
     end
   end
-
-  MAGSPACING = clamp(MAGSPACING + magspacedelta, MSPACE_MIN, MSPACE_MAX)
-
-  FODOGAP = clamp(FODOGAP + fododelta, FODO_MIN, MAGSPACING)
-
 end
 
 function show_debug()
-  vpprint("sep/curr: \139/\131: down \145/\148: up. ",0,116)
-  vpprint("\142: pair sep.   \151: x5 ",0,123)
-  vpprint("game ACC_state:"..ACC_STATE_NAMES[ACC_STATE],0,0)
-  vpprint("cpu: "..flr(stat(1)*100).."%, MEM:"..flr(stat(0)).."/2048",0,8)
-  vpprint("curr: "..MAGNETS[1].current,90,0)
-  vpprint("pair: "..FODOGAP,90,8)
-  vpprint("grp: "..MAGSPACING,90,16)
+  vpprint("\131/\148: change focussing current",0,117)
+  vpprint("\145: progress time",0,123)
+  -- vpprint("\142: pair sep.   \151: x5 ",0,123)
+  vpprint("beam loss: "..flr(100*(synch_nprotons - synch_protons:num())/(1 + synch_nprotons)).."%",
+    0,8, kGREEN)
+  vpprint("beam width: "..beam_width, 64, 8, kGREEN)
+  vpprint("beam emit: "..beam_emittance,64,16,kGREEN)
+  vpprint("foc. curr.: "..MAGNETS[1].current,0,16,kGREEN)
+
 end

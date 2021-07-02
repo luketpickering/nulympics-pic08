@@ -1,0 +1,5 @@
+kSPR_PROTON_R = 1
+kSPR_PIP_R = 4
+kSPR_PIM_R = 7
+kSPR_MU_R = 10
+kSPR_NU_R = 13

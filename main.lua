@@ -2,10 +2,11 @@ function menu_init()
   menu_time = 0
   GAME_STATES[STATE][2] = false
   selected = 1
+  transitioning = false
 end
 
 function menu_update()
-  menu_time += 1/30
+  menu_time += FSPEED
 
   local ch = 0
   if(btnp(2)) ch -= 1
@@ -16,8 +17,11 @@ function menu_update()
   end
 
   if(btnp(4)) then 
-    STATE = selected + 1
-    _update()
+    if(#GAME_STATES[selected+1] == 5) then
+      STATE = selected + 1
+      transitioning = true
+      _update()
+    end
   end
 end
 
@@ -52,11 +56,12 @@ end
 GAME_STATES = {
   {"MENU", true, menu_init, menu_update, menu_draw},
   {"linacCEL"},
-  {"synch", true, accelerate_init, accelerate_update, accelerate_draw},
+  {"synch", true, synch_init, synch_update, synch_draw},
   {"focus", },
   {"decay", true, decay_init, decay_update, decay_draw },
   {"interact"},
   {"oscillate", },
+  {"zoo", true, zoo_init, zoo_update, zoo_draw},
 }
 
 function _init()
@@ -65,10 +70,12 @@ end
 
 function _update()
   if (GAME_STATES[STATE][2]) GAME_STATES[STATE][3]()
-  GAME_STATES[STATE][4]()
+  GAME_STATES[STATE][4](transitioning)
+  transitioning = false
 end
 
 function _draw()
   GAME_STATES[STATE][5]()
   show_vmachine_stats(10, 0, kWHITE)
 end
+
