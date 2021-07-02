@@ -2,6 +2,10 @@ function vec(x,y)
 	return {x = x or 0, y = y or 0}
 end
 
+function vcopy(a)
+	return {x = a.x or 0, y = a.y or 0}
+end
+
 function lvec(x,y,t)
 	return {x = x or 0, y = y or 0, t = t or 0}
 end
@@ -14,8 +18,12 @@ function vscale(s,a)
 	return vec(s*a.x, s*a.y)
 end
 
+function vmag2(a)
+	return a.x*a.x + a.y*a.y
+end
+
 function vmag(a)
-	return sqrt(a.x*a.x + a.y*a.y)
+	return sqrt(vmag2(a))
 end
 
 function vdot(a,b)

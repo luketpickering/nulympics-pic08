@@ -4,10 +4,10 @@ kSYN_WIN = 0b100
 kSYN_END = 0b1000
 
 function synch_init()
-  MAGSPACING=100
+  MAGSPACING=200
 
   MSPACE_MIN=50
-  MSPACE_MAX=256
+  MSPACE_MAX=300
   MAGSPACING=clamp(MAGSPACING,MSPACE_MIN,MSPACE_MAX)
 
   FODO_MIN=50
@@ -27,23 +27,36 @@ function synch_init()
 
   make_beampipe()
 
-  beam_width = 0
-  beam_emittance = 0
+  bunch_width = 0
+  bunch_length = 0
+  bunch_emittance = 0
+  bunch_mean_pos = vec()
 
-  synch_nprotons = 50
+  initial_kick_x = 40
+  initial_emittance = 0.1
+
+  bunch_v = initial_kick_x * FSPEED
+
+  synch_nprotons = 150
   synch_protons = make_particle_list()
   synch_protons:add_parts(generate_particles(vec(5,80),synch_nprotons, 5, true, kRED))
   synch_protons:update(function(p)
-      p:kick(vec(100, rnd(20) - 10))
+      p:kick(vec(initial_kick_x, rnd(2 * initial_kick_x * initial_emittance) - (initial_kick_x * initial_emittance)))
       p:update(0)
-      beam_width += abs(p.pos.y - bp.y)
-      beam_emittance += abs(p.dpdt.y) 
+      bunch_mean_pos = vadd(bunch_mean_pos, p.pos)
+      bunch_width += abs(p.pos.y - bp.y)
+      bunch_length += abs(p.pos.x - 5)
+      bunch_emittance += abs(p.dpdt.y) 
   end)
-  beam_width /= synch_protons:num()
-  beam_emittance /= synch_protons:num()
+  bunch_width /= synch_protons:num()
+  bunch_length /= synch_protons:num()
+  bunch_emittance /= synch_protons:num()
+
+  bunch_mean_pos = vscale(1/synch_protons:num(),bunch_mean_pos)
+  last_bunch_mean_pos = vcopy(bunch_mean_pos)
 
   player_proton = make_particle(vec(5,80), nil, kSPR_PROTON_R)
-  player_proton:kick(vec(100,rnd(20) - 10))
+  player_proton:kick(vec(initial_kick_x,rnd(2 * initial_kick_x * initial_emittance) - (initial_kick_x * initial_emittance)))
   player_proton:update(0)
 
 
@@ -53,6 +66,13 @@ function synch_init()
 end
 
 function synch_update()
+
+  if (btnp(4)) synch_init()
+
+  do_kick = false
+  if (btnp(5)) do_kick = true
+
+
   if((MAGNETS[3].center.x + MAGNETS[3].hlength - player_proton.pos.x) < 0) then
     MAGNETS[1] = MAGNETS[3]
     MAGNETS[2] = MAGNETS[4]
@@ -69,22 +89,34 @@ function synch_update()
 
     if btn(1) then
       local bf = get_bfield_list(MAGNETS, player_proton.pos)
-      player_proton:kick(vec(0, - player_proton.dpdt.x * bf))
+      player_proton:kick(vec(do_kick and 20 or 0, - player_proton.dpdt.x * bf))
       player_proton:update(FSPEED)
 
-      beam_width = 0
-      beam_emittance = 0
+      bunch_width = 0
+      bunch_length = 0
+      bunch_emittance = 0
 
+      bunch_mean_pos = vec()
       synch_protons:update(function(p)
         local bf = get_bfield_list(MAGNETS, p.pos)
-        beam_width += p.pos.y - bp.y
-        beam_emittance += abs(p.dpdt.y)
-        p:kick(vec(0, - p.dpdt.x * bf))
+        bunch_width += abs(p.pos.y - bp.y)
+        bunch_length += abs(p.pos.x - last_bunch_mean_pos.x)
+        bunch_emittance += abs(p.dpdt.y)
+        p:kick(vec(do_kick and 20 or 0, - p.dpdt.x * bf))
+
+        -- p:kick(vscale(0.01 / vmag2(vatob(p.pos,last_bunch_mean_pos)),
+        --   vec(sign(p.pos.x -last_bunch_mean_pos.x), 
+        --       sign(p.pos.y -last_bunch_mean_pos.y))))
         p:update(FSPEED)
+        bunch_mean_pos = vadd(bunch_mean_pos, p.pos)
       end)
 
-      beam_width /= synch_protons:num()
-      beam_emittance /= synch_protons:num()
+      bunch_width /= synch_protons:num()
+      bunch_length /= synch_protons:num()
+      bunch_emittance /= synch_protons:num()
+      bunch_mean_pos = vscale(1/synch_protons:num(),bunch_mean_pos)
+      bunch_v = (bunch_mean_pos.x - last_bunch_mean_pos.x) * FSPEED
+      last_bunch_mean_pos = vcopy(bunch_mean_pos)
     end
 
     if(abs(player_proton.pos.y - bp.y) > (bp.hwy-2)) then
@@ -123,31 +155,31 @@ function synch_draw()
                MAGNETS[M].center.y - MAGNETS[M].hwidth - 2, kWHITE)
   end
 
-  for M =1, #MAGNETS, 2 do
-    local x1 = MAGNETS[M].center.x
-    local x2 = MAGNETS[M+1].center.x
-    local y1 = MAGNETS[M].center.y - MAGNETS[M].hwidth - 8
-    local deltax = x2 - x1
-    line(x1, y1, x2, y1, kGREEN)
-    line(x1, y1 - 2, x1, y1 + 2, kGREEN)
-    line(x2, y1 - 2, x2, y1 + 2, kGREEN)
+  -- for M =1, #MAGNETS, 2 do
+  --   local x1 = MAGNETS[M].center.x
+  --   local x2 = MAGNETS[M+1].center.x
+  --   local y1 = MAGNETS[M].center.y - MAGNETS[M].hwidth - 8
+  --   local deltax = x2 - x1
+  --   line(x1, y1, x2, y1, kGREEN)
+  --   line(x1, y1 - 2, x1, y1 + 2, kGREEN)
+  --   line(x2, y1 - 2, x2, y1 + 2, kGREEN)
 
-    print(deltax, 
-      deltax/2 + x1 - 3, y1 - 6, kGREEN)
-  end
+  --   print(deltax, 
+  --     deltax/2 + x1 - 3, y1 - 6, kGREEN)
+  -- end
 
-  for M = 1, (#MAGNETS-2), 2 do
-    local x1 = MAGNETS[M].center.x
-    local x2 = MAGNETS[M+2].center.x
-    local y1 = MAGNETS[M].center.y - MAGNETS[M].hwidth - 16
-    local deltax = x2 - x1
-    line(x1, y1, x2, y1, kRED)
-    line(x1, y1 - 2, x1, y1 + 2, kRED)
-    line(x2, y1 - 2, x2, y1 + 2, kRED)
+  -- for M = 1, (#MAGNETS-2), 2 do
+  --   local x1 = MAGNETS[M].center.x
+  --   local x2 = MAGNETS[M+2].center.x
+  --   local y1 = MAGNETS[M].center.y - MAGNETS[M].hwidth - 16
+  --   local deltax = x2 - x1
+  --   line(x1, y1, x2, y1, kRED)
+  --   line(x1, y1 - 2, x1, y1 + 2, kRED)
+  --   line(x2, y1 - 2, x2, y1 + 2, kRED)
 
-    print(deltax, 
-      deltax/2 + x1 - 3, y1 - 6, kRED)
-  end
+  --   print(deltax, 
+  --     deltax/2 + x1 - 3, y1 - 6, kRED)
+  -- end
   
   synch_protons:draw()
 
@@ -195,7 +227,7 @@ function draw_beampipe()
 end
 
 function read_input()
-  local delta = 1
+  local delta = 0.25
   local magdelta = 0
   if (btnp(2)) magdelta += delta --up
   if (btnp(3)) magdelta -= delta --down
@@ -211,12 +243,16 @@ end
 
 function show_debug()
   vpprint("\131/\148: change focussing current",0,117)
-  vpprint("\145: progress time",0,123)
+  vpprint("\145: progress time \151: rf kick",0,123)
   -- vpprint("\142: pair sep.   \151: x5 ",0,123)
   vpprint("beam loss: "..flr(100*(synch_nprotons - synch_protons:num())/(1 + synch_nprotons)).."%",
     0,8, kGREEN)
-  vpprint("beam width: "..beam_width, 64, 8, kGREEN)
-  vpprint("beam emit: "..beam_emittance,64,16,kGREEN)
-  vpprint("foc. curr.: "..MAGNETS[1].current,0,16,kGREEN)
+  vpprint("foc.cur.: "..MAGNETS[1].current,0,16,kGREEN)
+  vpprint("restart: \142",0,32,kGREEN)
+
+  vpprint("bch width: "..(flr(bunch_width*10)/10), 68, 8, kGREEN)
+  vpprint("bch length: "..(flr(bunch_length*10)/10), 68, 16, kGREEN)
+  vpprint("bch emit: "..(flr(bunch_emittance*10)/10),68,24,kGREEN)
+  vpprint("bch vx: "..(flr(bunch_v*10)/10),68,32,kGREEN)
 
 end
