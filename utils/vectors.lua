@@ -46,12 +46,6 @@ function vang(a)
 	return atan3(a.x,a.y)
 end
 
-function vspr(sprn, x,y,fx,fy)
-  fx = fx or false
-  fy = fy or false
-  spr(sprn, x-4, y-4,1,1,fx,fy)
-end
-
 function v2s(v)
 	return ("{ x: "..v.x..", y:"..v.y.." }")
 end

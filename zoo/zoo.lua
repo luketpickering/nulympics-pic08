@@ -32,7 +32,7 @@ function zoo_draw()
   cls()
   for I = 1, #zoo_particles do
     local P = zoo_particles[I]
-    P[1]:spr(P[2])
+    P[1]:spr(P[2], kDBLUE)
     print(P[3], P[1].pos.x - 4 - (#P[3]), P[1].pos.y-12,
           (I == part_selected) and 
           (zoo_time < 0.5) and kWHITE or kSLATE)

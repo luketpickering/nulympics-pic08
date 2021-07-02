@@ -104,3 +104,11 @@ function arrow_ang(x1, y1, ang, length, arm_length, c)
   local y2 = y1 + length * nsin(ang)
   arrow(x1,y1,x2,y2,arm_length,c)
 end
+
+function vspr(sprn, x, y, nx, ny, fx, fy)
+  fx = fx or false
+  fy = fy or false
+  nx = nx or 1
+  ny = ny or 1
+  spr(sprn, x-(8*nx*0.5), y-(8*ny*0.5),nx,ny,fx,fy)
+end
